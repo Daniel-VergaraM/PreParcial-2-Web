@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # Servicio de Base de Datos MySQL
+  db:
+    image: mysql:8.0
+    container_name: travel-plans-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-travel_plans_db}
+      MYSQL_USER: ${DB_USERNAME:-traveluser}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-travelpass}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - travel-network
+
+  # Servicio de la Aplicación NestJS
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: travel-plans-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USERNAME: ${DB_USERNAME:-traveluser}
+      DB_PASSWORD: ${DB_PASSWORD:-travelpass}
+      DB_NAME: ${DB_NAME:-travel_plans_db}
+      DB_SYNCHRONIZE: "true"
+      DB_LOGGING: "false"
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - travel-network
+
+# Volúmenes persistentes
+volumes:
+  mysql_data:
+    driver: local
+
+# Red compartida
+networks:
+  travel-network:
+    driver: bridge
