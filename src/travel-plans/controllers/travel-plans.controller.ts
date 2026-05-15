@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Param, Delete, ParseIntPipe, ValidationPip
 import { TravelPlansService, TravelPlanResponse } from '../services/travel-plans.service';
 import { CreateTravelPlanDto } from '../dto/create-travel-plan.dto';
 import { UpdateTravelPlanDto } from '../dto/update-travel-plan.dto';
+import { CreateExpenseDto } from '../dto/create-expense.dto';
 
 /**
  * Controlador de Planes de Viaje - Interfaz Pública
@@ -19,6 +20,7 @@ export class TravelPlansController {
    * 
    * Ejemplo de body:
    * {
+   *   "userId": 1,
    *   "title": "Viaje por Sudamérica",
    *   "start_date": "2024-06-01",
    *   "end_date": "2024-06-15",
@@ -78,5 +80,24 @@ export class TravelPlansController {
     return {
       message: `Plan de viaje con ID ${id} eliminado exitosamente`
     };
+  }
+
+  /**
+   * POST /travel-plans/expenses
+   * Agrega un gasto a un plan de viaje existente.
+   * 
+   * Ejemplo de body:
+   * {
+   *   "travel_plan_id": "1",
+   *   "description": "Hotel en Bogotá",
+   *   "amount": "150.00",
+   *   "category": "Alojamiento"
+   * }
+   */
+  @Post('expenses')
+  async createExpense(
+    @Body(ValidationPipe) createExpenseDto: CreateExpenseDto,
+  ): Promise<TravelPlanResponse> {
+    return this.travelPlansService.createExpense(createExpenseDto);
   }
 }

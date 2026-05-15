@@ -25,6 +25,9 @@ PreParcial2/
 ├── README.md
 ├── src/
 │   ├── app.module.ts
+│   ├── common/
+│   │   └── middleware/
+│   │       └── telemetry.middleware.ts    # Middleware de telemetría
 │   ├── countries/
 │   │   ├── countries.module.ts
 │   │   ├── entities/
@@ -34,17 +37,29 @@ PreParcial2/
 │   │   └── services/
 │   │       └── countries.service.ts
 │   ├── main.ts
-│   └── travel-plans/
+│   ├── travel-plans/
+│   │   ├── controllers/
+│   │   │   └── travel-plans.controller.ts
+│   │   ├── dto/
+│   │   │   ├── create-expense.dto.ts
+│   │   │   ├── create-travel-plan.dto.ts
+│   │   │   └── update-travel-plan.dto.ts
+│   │   ├── entities/
+│   │   │   ├── expense.entity.ts
+│   │   │   └── travel-plan.entity.ts
+│   │   ├── services/
+│   │   │   └── travel-plans.service.ts
+│   │   └── travel-plans.module.ts
+│   └── users/                              # Nuevo: Módulo de Usuarios
 │       ├── controllers/
-│       │   └── travel-plans.controller.ts
+│       │   └── users.controller.ts
 │       ├── dto/
-│       │   ├── create-travel-plan.dto.ts
-│       │   └── update-travel-plan.dto.ts
+│       │   └── create-user.dto.ts
 │       ├── entities/
-│       │   └── travel-plan.entity.ts
+│       │   └── user.entity.ts
 │       ├── services/
-│       │   └── travel-plans.service.ts
-│       └── travel-plans.module.ts
+│       │   └── users.service.ts
+│       └── users.module.ts
 └── tsconfig.json
 ```
 
@@ -133,18 +148,170 @@ npm run start:dev
 
 La API estará disponible en: `http://localhost:3000`
 
+## Telemetría y Auditoría
+
+La API implementa un **Middleware de Telemetría** que registra automáticamente todas las peticiones a los módulos de viajes y usuarios.
+
+### Header Requerido
+
+```
+x-user-id: ID_DEL_USUARIO
+```
+
+### Logs de Auditoría
+
+Por cada petición, el middleware imprime en consola:
+
+```
+[User: {ID_DEL_HEADER}] accedió a {RUTA} - {MÉTODO}
+```
+
+**Ejemplos:**
+```
+[User: 1] accedió a /travel-plans - POST
+[User: 1] accedió a /users - GET
+[User: ANONYMOUS] accedió a /travel-plans/1 - GET
+```
+
+### Casos Borde
+
+- **Si el header `x-user-id` no está presente:** Se registra como `[User: ANONYMOUS]`
+- **Si el header está presente:** Se registra el valor proporcionado
+
 ## API Endpoints
 
-### 1. Crear un Plan de Viaje
+### Usuarios
 
-**POST** `/travel-plans`
+#### 1. Crear Usuario
 
-Crea un nuevo plan de viaje con múltiples países. Los países se validan y se obtienen de la caché local o de la API externa.
+**POST** `/users`
+
+Crea un nuevo usuario en el sistema.
+
+**Headers:**
+```
+x-user-id: 1
+Content-Type: application/json
+```
 
 **Request:**
 
 ```json
 {
+  "name": "Juan Pérez",
+  "email": "juan@ejemplo.com"
+}
+```
+
+**Validaciones:**
+- `name`: Requerido, entre 2 y 255 caracteres
+- `email`: Requerido, formato de email válido, único
+
+**Response (201 Created):**
+
+```json
+{
+  "id": 1,
+  "name": "Juan Pérez",
+  "email": "juan@ejemplo.com",
+  "travelPlans": []
+}
+```
+
+#### 2. Listar Usuarios
+
+**GET** `/users`
+
+Obtiene todos los usuarios registrados con sus planes de viaje.
+
+**Headers:**
+```
+x-user-id: 1
+```
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Juan Pérez",
+    "email": "juan@ejemplo.com",
+    "travelPlans": []
+  }
+]
+```
+
+#### 3. Obtener Usuario por ID
+
+**GET** `/users/:id`
+
+Obtiene el detalle de un usuario específico.
+
+**Headers:**
+```
+x-user-id: 1
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "id": 1,
+  "name": "Juan Pérez",
+  "email": "juan@ejemplo.com",
+  "travelPlans": [...]
+}
+```
+
+**Error (404 Not Found):**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Usuario con ID 999 no encontrado",
+  "error": "Not Found"
+}
+```
+
+#### 4. Eliminar Usuario
+
+**DELETE** `/users/:id`
+
+Elimina un usuario del sistema.
+
+**Headers:**
+```
+x-user-id: 1
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "message": "Usuario con ID 1 eliminado exitosamente"
+}
+```
+
+### Planes de Viaje
+
+#### 1. Crear Plan de Viaje
+
+**POST** `/travel-plans`
+
+Crea un nuevo plan de viaje vinculado a un usuario. Los países se validan y se obtienen de la caché local o de la API externa.
+
+**Headers:**
+```
+x-user-id: 1
+Content-Type: application/json
+```
+
+**Request:**
+
+```json
+{
+  "userId": 1,
   "title": "Viaje por Sudamérica",
   "start_date": "2024-06-01",
   "end_date": "2024-06-15",
@@ -153,6 +320,7 @@ Crea un nuevo plan de viaje con múltiples países. Los países se validan y se 
 ```
 
 **Validaciones:**
+- `userId`: Requerido, debe existir un usuario con ese ID (404 si no existe)
 - `title`: Requerido, entre 3 y 255 caracteres
 - `start_date`: Requerido, formato ISO 8601 (YYYY-MM-DD)
 - `end_date`: Requerido, formato ISO 8601, debe ser posterior a `start_date`
@@ -163,6 +331,7 @@ Crea un nuevo plan de viaje con múltiples países. Los países se validan y se 
 ```json
 {
   "id": 1,
+  "userId": 1,
   "title": "Viaje por Sudamérica",
   "start_date": "2024-06-01T00:00:00.000Z",
   "end_date": "2024-06-15T00:00:00.000Z",
@@ -189,16 +358,77 @@ Crea un nuevo plan de viaje con múltiples países. Los países se validan y se 
       "flag_url": "https://flagcdn.com/w320/cl.png"
     }
   ],
+  "expenses": [],
   "created_at": "2024-01-15T10:30:00.000Z",
   "updated_at": "2024-01-15T10:30:00.000Z"
 }
 ```
 
-### 2. Listar Todos los Planes
+**Error (404 Not Found) - Usuario no existe:**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Usuario con ID 999 no encontrado",
+  "error": "Not Found"
+}
+```
+
+#### 2. Agregar Gasto a un Plan de Viaje
+
+**POST** `/travel-plans/expenses`
+
+Agrega un gasto a un plan de viaje específico.
+
+**Headers:**
+```
+x-user-id: 1
+Content-Type: application/json
+```
+
+**Request:**
+
+```json
+{
+  "travel_plan_id": "1",
+  "description": "Hotel en Bogotá",
+  "amount": "150.00",
+  "category": "Alojamiento"
+}
+```
+
+**Response (201 Created):**
+
+```json
+{
+  "id": 1,
+  "userId": 1,
+  "title": "Viaje por Sudamérica",
+  "start_date": "2024-06-01T00:00:00.000Z",
+  "end_date": "2024-06-15T00:00:00.000Z",
+  "countries": [...],
+  "expenses": [
+    {
+      "description": "Hotel en Bogotá",
+      "amount": 150.00,
+      "category": "Alojamiento"
+    }
+  ],
+  "created_at": "2024-01-15T10:30:00.000Z",
+  "updated_at": "2024-01-15T11:00:00.000Z"
+}
+```
+
+#### 3. Listar Todos los Planes
 
 **GET** `/travel-plans`
 
 Obtiene todos los planes de viaje registrados con información enriquecida de los países.
+
+**Headers:**
+```
+x-user-id: 1
+```
 
 **Response (200 OK):**
 
@@ -206,39 +436,40 @@ Obtiene todos los planes de viaje registrados con información enriquecida de lo
 [
   {
     "id": 1,
+    "userId": 1,
     "title": "Viaje por Sudamérica",
     "start_date": "2024-06-01T00:00:00.000Z",
     "end_date": "2024-06-15T00:00:00.000Z",
-    "countries": [
-      {
-        "alpha3_code": "COL",
-        "name": "Colombia",
-        "region": "Americas",
-        "capital": "Bogotá",
-        "flag_url": "https://flagcdn.com/w320/co.png"
-      }
-    ],
+    "countries": [...],
+    "expenses": [...],
     "created_at": "2024-01-15T10:30:00.000Z",
     "updated_at": "2024-01-15T10:30:00.000Z"
   }
 ]
 ```
 
-### 3. Obtener Plan por ID
+#### 4. Obtener Plan por ID
 
 **GET** `/travel-plans/:id`
 
 Obtiene el detalle de un plan específico.
+
+**Headers:**
+```
+x-user-id: 1
+```
 
 **Response (200 OK):**
 
 ```json
 {
   "id": 1,
+  "userId": 1,
   "title": "Viaje por Sudamérica",
   "start_date": "2024-06-01T00:00:00.000Z",
   "end_date": "2024-06-15T00:00:00.000Z",
   "countries": [...],
+  "expenses": [...],
   "created_at": "2024-01-15T10:30:00.000Z",
   "updated_at": "2024-01-15T10:30:00.000Z"
 }
@@ -254,11 +485,17 @@ Obtiene el detalle de un plan específico.
 }
 ```
 
-### 4. Actualizar Plan de Viaje
+#### 5. Actualizar Plan de Viaje
 
 **PATCH** `/travel-plans/:id`
 
 Actualiza parcialmente un plan existente.
+
+**Headers:**
+```
+x-user-id: 1
+Content-Type: application/json
+```
 
 **Request:**
 
@@ -274,20 +511,27 @@ Actualiza parcialmente un plan existente.
 ```json
 {
   "id": 1,
+  "userId": 1,
   "title": "Viaje extendido por Sudamérica",
   "start_date": "2024-06-01T00:00:00.000Z",
   "end_date": "2024-06-20T00:00:00.000Z",
   "countries": [...],
+  "expenses": [...],
   "created_at": "2024-01-15T10:30:00.000Z",
   "updated_at": "2024-01-15T11:00:00.000Z"
 }
 ```
 
-### 5. Eliminar Plan de Viaje
+#### 6. Eliminar Plan de Viaje
 
 **DELETE** `/travel-plans/:id`
 
 Elimina un plan de viaje del sistema.
+
+**Headers:**
+```
+x-user-id: 1
+```
 
 **Response (200 OK):**
 
@@ -299,12 +543,26 @@ Elimina un plan de viaje del sistema.
 
 ## Ejemplos de Uso con Postman/cURL
 
-### Crear un Plan de Viaje
+### Crear un Usuario
+
+```bash
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -H "x-user-id: 1" \
+  -d '{
+    "name": "Juan Pérez",
+    "email": "juan@ejemplo.com"
+  }'
+```
+
+### Crear un Plan de Viaje (con usuario válido)
 
 ```bash
 curl -X POST http://localhost:3000/travel-plans \
   -H "Content-Type: application/json" \
+  -H "x-user-id: 1" \
   -d '{
+    "userId": 1,
     "title": "Viaje por Europa",
     "start_date": "2024-07-01",
     "end_date": "2024-07-20",
@@ -312,16 +570,55 @@ curl -X POST http://localhost:3000/travel-plans \
   }'
 ```
 
+### Crear Plan de Viaje con Usuario Inexistente (Retorna 404)
+
+```bash
+curl -X POST http://localhost:3000/travel-plans \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 999,
+    "title": "Viaje fallido",
+    "start_date": "2024-08-01",
+    "end_date": "2024-08-15",
+    "country_codes": ["COL"]
+  }'
+```
+
+**Response:**
+```json
+{
+  "statusCode": 404,
+  "message": "Usuario con ID 999 no encontrado",
+  "error": "Not Found"
+}
+```
+
 ### Obtener Todos los Planes
 
 ```bash
-curl http://localhost:3000/travel-plans
+curl http://localhost:3000/travel-plans \
+  -H "x-user-id: 1"
 ```
 
 ### Obtener Plan Específico
 
 ```bash
-curl http://localhost:3000/travel-plans/1
+curl http://localhost:3000/travel-plans/1 \
+  -H "x-user-id: 1"
+```
+
+### Agregar Gasto a un Plan
+
+```bash
+curl -X POST http://localhost:3000/travel-plans/expenses \
+  -H "Content-Type: application/json" \
+  -H "x-user-id: 1" \
+  -d '{
+    "travel_plan_id": "1",
+    "description": "Hotel en Madrid",
+    "amount": "200.00",
+    "category": "Alojamiento"
+  }'
 ```
 
 ### Actualizar Plan
@@ -329,6 +626,7 @@ curl http://localhost:3000/travel-plans/1
 ```bash
 curl -X PATCH http://localhost:3000/travel-plans/1 \
   -H "Content-Type: application/json" \
+  -H "x-user-id: 1" \
   -d '{
     "title": "Gran Viaje por Europa"
   }'
@@ -337,7 +635,8 @@ curl -X PATCH http://localhost:3000/travel-plans/1 \
 ### Eliminar Plan
 
 ```bash
-curl -X DELETE http://localhost:3000/travel-plans/1
+curl -X DELETE http://localhost:3000/travel-plans/1 \
+  -H "x-user-id: 1"
 ```
 
 ## Códigos de País Disponibles
@@ -422,8 +721,11 @@ docker-compose up -d
 ```sql
 -- Eliminar todas las tablas
 DROP TABLE IF EXISTS travel_plan_countries;
+DROP TABLE IF EXISTS travel_plan_expenses;
+DROP TABLE IF EXISTS expenses;
 DROP TABLE IF EXISTS travel_plans;
 DROP TABLE IF EXISTS countries;
+DROP TABLE IF EXISTS users;
 
 -- O eliminar y recrear la base de datos
 DROP DATABASE IF EXISTS travel_plans_db;
@@ -436,10 +738,26 @@ CREATE DATABASE travel_plans_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 
 - **CountriesModule**: Módulo interno sin controladores. Solo exporta `CountriesService` para uso interno.
 - **TravelPlansModule**: Módulo público que importa `CountriesModule` y expone endpoints REST.
+- **UsersModule**: Módulo público para gestión de usuarios, exporta `UsersService` para validación de propiedad.
 
-Esta separación asegura que la lógica de países no sea accesible directamente vía HTTP.
+Esta separación asegura que la lógica de países no sea accesible directamente vía HTTP, mientras que usuarios y planes son módulos independientes pero interconectados.
 
-### 2. **Lógica de Caché**
+### 2. **Lógica de Propiedad**
+
+Cada `TravelPlan` está vinculado a un `User` mediante:
+- Campo `userId` en la entidad `TravelPlan`
+- Relación `@ManyToOne` entre `TravelPlan` y `User`
+- Validación en el servicio: el usuario debe existir antes de crear el plan
+
+### 3. **Middleware de Telemetría**
+
+- Implementado en `TelemetryMiddleware`
+- Extrae header `x-user-id` de cada petición
+- Registra en consola: `[User: {ID}] accedió a {RUTA} - {MÉTODO}`
+- Si no hay header: `[User: ANONYMOUS]`
+- Aplicado a rutas `/travel-plans` y `/users`
+
+### 4. **Lógica de Caché de Países**
 
 - Primera llamada: Consulta API externa → Guarda en BD → Retorna
 - Siguientes llamadas: Consulta BD local → Retorna directamente
@@ -449,20 +767,22 @@ Beneficios:
 - Mejora performance
 - Permite funcionar offline si la BD está poblada
 
-### 3. **Relaciones Muchos-a-Muchos**
+### 5. **Relaciones Muchos-a-Muchos**
 
-Un plan puede tener múltiples países, y un país puede estar en múltiples planes.
-TypeORM maneja automáticamente la tabla intermedia `travel_plan_countries`.
+- Un plan puede tener múltiples países, y un país puede estar en múltiples planes.
+- Un usuario puede tener múltiples planes.
+- TypeORM maneja automáticamente las tablas intermedias.
 
-### 4. **Validación con DTOs**
+### 6. **Validación con DTOs**
 
 Uso de `class-validator` para validaciones automáticas:
 - Formato ISO 8601 para fechas
 - Rangos de caracteres
 - Validación de arrays
 - Sanitización de entradas
+- Verificación de existencia de usuario (404 si no existe)
 
-### 5. **Docker Multi-Stage**
+### 7. **Docker Multi-Stage**
 
 El Dockerfile usa multi-stage build para:
 - Reducir tamaño de imagen final
@@ -495,6 +815,18 @@ O desactivar sincronización automática:
 DB_SYNCHRONIZE=false
 ```
 
+### Usuario no encontrado al crear plan
+
+```json
+{
+  "statusCode": 404,
+  "message": "Usuario con ID 999 no encontrado",
+  "error": "Not Found"
+}
+```
+
+**Solución:** Primero crea el usuario usando `POST /users`, luego usa el ID retornado al crear el plan.
+
 ### País no encontrado
 
 Si un código de país no existe en RestCountries:
@@ -508,3 +840,28 @@ Si un código de país no existe en RestCountries:
 ```
 
 Verificar que el código sea válido en https://en.wikipedia.org/wiki/ISO_3166-1_alpha-3
+
+## Changelog
+
+### Parcial 2 - Parte A: Módulo de Usuarios y Vinculación
+
+- **UsersModule**: Nuevo módulo completo con entidad User (`id`, `name`, `email`)
+- **UsersController**: Endpoints REST para crear, listar, obtener y eliminar usuarios
+- **UsersService**: Servicio con métodos CRUD y `findById()` para validación
+- **Vinculación de Propiedad**: Cada TravelPlan está vinculado a un `userId` mediante relación `@ManyToOne`
+- **Validación de Usuario**: Al crear un plan (POST /travel-plans), se valida que el usuario exista. Retorna 404 Not Found si no existe.
+
+### Parcial 2 - Parte B: Telemetría mediante Middleware
+
+- **TelemetryMiddleware**: Middleware que extrae el header `x-user-id` de cada petición
+- **Registro de Auditoría**: Imprime en consola `[User: {ID}] accedió a {RUTA} - {MÉTODO}`
+- **Casos Borde**: Si el header no está presente, muestra `[User: ANONYMOUS]`
+- **Configuración**: Middleware aplicado a rutas `/travel-plans` y `/users` en `AppModule`
+
+### Parcial 2 - Features Anteriores
+
+- Se implementó la creación de gastos en el servicio de planes de viaje.
+- Se creó una nueva entidad `Expense` para manejar los gastos asociados a cada plan de viaje.
+- Se agregó un nuevo endpoint para agregar gastos a un plan de viaje específico.
+- Se realizaron validaciones para asegurar que los gastos tengan una descripción válida, un monto positivo y una categoría válida.
+- Se actualizó la respuesta del endpoint para incluir los gastos asociados a cada plan de viaje.

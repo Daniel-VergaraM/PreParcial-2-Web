@@ -1,6 +1,27 @@
-import { IsNotEmpty, IsString, Length, IsArray, IsDateString, ArrayMinSize, ArrayMaxSize, IsISO8601 } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  Length,
+  IsArray,
+  ArrayMinSize,
+  ArrayMaxSize,
+  IsISO8601,
+  IsNumber,
+} from 'class-validator';
 
 export class CreateTravelPlanDto {
+  @IsNotEmpty({ message: 'El ID del usuario es obligatorio' })
+  @IsNumber(
+    {
+      allowNaN: false,
+      allowInfinity: false,
+      maxDecimalPlaces: 0,
+    },
+    {
+      message: 'El ID del usuario debe ser un número',
+    },
+  )
+  userId: number;
   @IsNotEmpty({ message: 'El título es obligatorio' })
   @IsString({ message: 'El título debe ser una cadena de texto' })
   @Length(3, 255, { message: 'El título debe tener entre 3 y 255 caracteres' })
